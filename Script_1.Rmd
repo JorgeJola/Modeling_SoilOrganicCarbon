@@ -202,7 +202,7 @@ new_grpsland <- list(Landscape = c("a" ,"b" ,"c","Composite"))
 new_spectra_A <- splitSpectraGroups(spectra_object_A, new_grpsland)
 PCAspectra_A <- aov_pcaSpectra(new_spectra_A, fac = "Landscape")
 ```
-###GRAFICOS DEPTH
+###GRAPH DEPTH
 ```{r}
 p3spectra_A <- aovPCAscores(new_spectra_A, PCAspectra_A, submat = 1, ellipse = "cls") 
 summary(aov(p3spectra_A$data$PC1~p3spectra_A$data$group))

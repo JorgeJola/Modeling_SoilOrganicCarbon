@@ -1,0 +1,264 @@
+---
+title: "Script2"
+output: html_document
+date: "2024-09-14"
+---
+```{r}
+library(spatialreg)
+library(readxl)
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(cluster)
+library(mclust)
+library(fpc)
+library(ggplot2)
+library(tidyr)
+library(readxl)
+library(dplyr)
+library(stringr)
+library(dbscan)
+library(factoextra)
+library(tidyr)
+library(spdep)
+library(ape)
+library(sp)
+library(MVA)
+library(nortest)
+```
+
+```{r}
+data.2=read_csv('Database_2.csv')
+head(data.2)
+```
+```{r}
+reflectance=colnames(data.2)[11:ncol(data.2)]
+
+reflectance <- gsub("nm", "", reflectance)
+
+reflectance <- as.numeric(reflectance)
+
+reflectance=sort(reflectance)
+```
+```{r}
+porc=c()
+for (i in 0:1500) {
+  data_cor=data.2[,c('SOC','DA')]
+  data_cor$band=data.2[,ncol(data.2)-i]
+  m=cor(data_cor)
+
+  porc=c(porc,eigen(m)$values[1]/sum(eigen(m)$values))
+}
+
+eigen_df=data.frame(reflectance,porc)
+
+ggplot(data = eigen_df, aes(x = reflectance, y = porc)) +
+  geom_point(color='darkblue') +
+  theme_minimal() +
+  labs(title = 'Eigenvalues in SOC - DA',y='Proportion',x='Wavelength (nm)')+
+  scale_x_continuous(breaks = seq(min(eigen_df$reflectance), max(eigen_df$reflectance), by = 100))+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+```{r}
+z_score_scaling <- function(x) {
+  return ((x - mean(x)) / sd(x))
+}
+
+eigen_df$porc=z_score_scaling(eigen_df$porc)
+colnames(eigen_df)[1]='lambda'
+colnames(eigen_df)[2]='eigen'
+eigen_df
+```
+Clustering
+```{r}
+Ms = eigen_df
+nc = 3
+dim(eigen_df)
+# k-means clustering
+set.seed(123)
+
+clus_km <- kmeans(x = Ms, centers = nc)
+eigen_df$kmeans = clus_km$cluster
+
+# K-medoids (PAM) clustering
+clus_pam <- pam(x = Ms, k = nc, metric = "euclidean")
+eigen_df$pam = clus_pam$clustering
+
+# CLARA clustering
+clus_clara <- clara(x = Ms, k = nc, metric = "euclidean",
+                    stand = TRUE, samples = 50, pamLike = TRUE)
+eigen_df$clara = clus_clara$clustering
+
+# Hierarchical clustering
+d <- dist(x = Ms, method = "euclidean")
+clus_jer <- hclust(d, method = "complete")
+clus_jer$grupo = cutree(clus_jer, k = nc)
+eigen_df$herarchical = clus_jer$grupo
+
+# Fuzzy clustering
+clus_fuz = fanny(x = Ms, diss = FALSE, k = nc,
+                 metric = "euclidean", stand = FALSE)
+eigen_df$clus_fuzzy = clus_fuz$clustering
+
+# Model based clustering
+clus_mod = Mclust(data = Ms, G = 3)
+eigen_df$clus_bmodel = clus_mod$classification
+
+
+tapply(eigen_df$lambda,eigen_df$kmeans,range)
+tapply(eigen_df$lambda,eigen_df$pam,range)
+tapply(eigen_df$lambda,eigen_df$clara,range)
+tapply(eigen_df$lambda,eigen_df$herarchical,range)
+tapply(eigen_df$lambda,eigen_df$clus_fuzzy,range)
+tapply(eigen_df$lambda,eigen_df$clus_bmodel,range)
+```
+```{r}
+ref=data.2[,11:ncol(data.2)]
+colnames(ref) <- as.numeric(gsub("nm", "", colnames(ref)))
+
+# First Interval
+bands1=ref[,which(colnames(ref) == 1000.00):which(colnames(ref) == 1245.02)]
+# Denominator
+den1=sum(as.numeric(colnames(bands1)))
+# Numerator
+num1=apply(bands1*as.numeric(colnames(bands1)),1,sum)
+
+pond_rho1=num1/den1
+# Second Interval
+bands2=ref[,which(colnames(ref) == 1506.93):which(colnames(ref) == 1846.38)]
+# Denominator
+den2=sum(as.numeric(colnames(bands2)))
+# Numerator
+num2=apply(bands2*as.numeric(colnames(bands2)),1,sum)
+
+pond_rho2=num2/den2
+
+# Third Interval
+bands3=ref[,which(colnames(ref) == 1899.7 ):which(colnames(ref) == 2500.00)]
+# Denominator
+den3=sum(as.numeric(colnames(bands3)))
+# Numerator
+num3=apply(bands3*as.numeric(colnames(bands3)),1,sum)
+
+pond_rho3=num3/den3
+```
+
+```{r}
+data_exp=data.frame(LONG=data.2$LONG,LAT=data.2$LAT,
+                     SOC=data.2$SOC,DA=data.2$DA,
+                     RHO1=pond_rho1,RHO2=pond_rho2,RHO3=pond_rho3)
+
+write.csv(datos_exp,"data_Qgis.csv") #Convert points to polygons in Qgis
+```
+## Spatial model with polygons
+```{r}
+polygons=read_xlsx('polygons_centroids.xlsx')
+```
+```{r}
+SOC=polygons$SOC_mean
+
+X=as.matrix(polygons[,c('SOC_mean','DA_mean','RH1O_mean','RH2O_mean','RH3O_mean')])
+options(digits = 12)
+
+XYdata=as.matrix(polygons[,c('lat','long')])
+```
+```{r}
+soc.d=as.matrix(dist(XYdata, diag=T, upper=T))
+soc.d.inv <-as.matrix(soc.d)
+soc.d.inv2 <-as.matrix(soc.d**0.5)
+diag(soc.d.inv) <- 0
+diag(soc.d.inv2) <- 0
+W=as.matrix(soc.d.inv)
+W2=as.matrix(soc.d.inv2)
+apply(W,1,sum)
+apply(W2,1,sum)
+sumas=apply(W,1,sum)
+sumas2=apply(W2,1,sum)
+We=W/sumas
+We2=W2/sumas2
+```
+```{r}
+We[lower.tri(We)]
+We2[lower.tri(We2)]
+length(We[We<0.05])
+length(We2[We2<0.05])
+apply(We,1,sum)
+```
+```{r}
+Moransoc=(Moran.I(SOC, We));Moransoc 
+plot(XYdata[,1],XYdata[,2],col=round(SOC,0),pch=19)
+grid(10,10)
+```
+```{r}
+contnb=dnearneigh(coordinates(XYdata),0,380000,longlat = F)
+contnb
+dlist <- nbdists(contnb, XYdata)
+dlist <- lapply(dlist, function(x) 1/sqrt(x))
+Wve=nb2listw(contnb,glist=dlist,style = "W")
+
+coords<-coordinates(XYdata)
+Ds<-row.names(as(XYdata, "matrix"))
+sids_kn2<-knn2nb(knearneigh(coords, k=1))
+
+plot(XYdata,cex=0.1)
+plot(sids_kn2, coords, add=T,cex=0.1)
+dist<-unlist(nbdists(sids_kn2, coords))
+summary(dist)
+max_k2<-max(dist)
+contnb<-dnearneigh(coords, d1=0, d2=1*max_k2)
+
+dlist <- nbdists(contnb, XYdata)
+dlist <- lapply(dlist, function(x) 1/sqrt(x))
+WW=nb2listw(contnb,glist=dlist,style = "W")
+```
+
+```{r}
+ERRORSARAR=errorsarlm(formula=SOC_mean~DA_mean+RH1O_mean+RH2O_mean,data=polygons,listw=WW)
+summary(ERRORSARAR)
+```
+```{r}
+shapiro.test(ERRORSARAR$residuals)
+```
+```{r}
+Moran.I(ERRORSARAR$residuals, We2)
+```
+## Estimated mean carbon and mean bulk density by landscape
+```{r}
+carb_data=data.frame(ID_cent=polygons$id,
+                     SOC_est=ERRORSARAR$fitted.values,
+                     DA=polygons$DA_mean,
+                     RO1=polygons$RH1O_mean,
+                     RO2=polygons$RH2O_mean,
+                     RO3=polygons$RH3O_mean)
+# Database is imported that links points with centroids
+centroids=read_xlsx("landscape_polygons.xlsx")
+colnames(centroids)[5]='ID_cent'
+
+new_carb_data=carb_data %>% 
+  left_join(centroids,by='ID_cent') 
+```
+```{r}
+library(ggpubr)
+formula <- y ~ poly(x, 1, raw = TRUE)
+p <- ggplot(new_carb_data, aes(DA, SOC_est, color = Landscape)) +
+  geom_point() +
+  stat_smooth(aes(fill = Landscape, color = Landscape), method = "lm", formula = formula) +
+  stat_regline_equation(
+    aes(label =  paste(..eq.label.., ..adj.rr.label.., sep = "~~~~")),
+    formula = formula
+  ) +
+  theme_bw()
+ggpar(p, palette = "jco")
+
+ggscatter(
+  new_carb_data, x = "DA", y = "SOC_est",
+  color = "Landscape", palette = "jco",
+  add = "reg.line"
+  ) +
+  facet_wrap(~Landscape) +
+  stat_cor(aes(label = ..r.label..), label.y = 4.4) +
+  stat_regline_equation(label.y = 4.2)+
+  labs(y="SOC (Estimated by spatial regression)",x="Bulk Density (g/cm³)")
+  theme(legend.position = 'none')
+```
+

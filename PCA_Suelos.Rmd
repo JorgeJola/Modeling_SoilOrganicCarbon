@@ -1,0 +1,400 @@
+### Installing Libraries
+```{r}
+library(readxl)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(tidyr)
+library(RColorBrewer)
+library(lattice)
+library(xml2)
+library(hyperSpec)
+library(R.utils)
+library(ChemoSpecUtils)
+library(ChemoSpec)
+library(robustbase)
+```
+
+### Get Data
+```{r}
+new_df=read.csv("/Users/jorgeandresjolahernandez/Desktop/Publicacion_Suelos/AnovaPCA/GitHub_Soil/Database_1.csv")
+```
+### Tranformation and cleaning
+```{r}
+# Rename landscape and depth levels
+process <- function(value) {
+  letra <- gsub("[0-9]", "", value)
+  if (letra == "") {
+    return("Compuesta")
+  } else {
+    return(letra)
+  }
+}
+Capa <- sapply(new_df$Capa, process)
+new_df$Capa=Capa
+new_df$Capa[new_df$Capa == "a"] <- "0-10"
+new_df$Capa[new_df$Capa == "b"] <- "10-20"
+new_df$Capa[new_df$Capa == "c"] <- "20-30"
+new_df$Capa[new_df$Capa == "Compuesta"] <- "Composite"
+new_df$Landscape[new_df$Landscape == "Alluvial"] <- "Pl"
+new_df$Landscape[new_df$Landscape == "Piedmont"] <- "P"
+new_df$Landscape=as.factor(new_df$Landscape)
+unique(new_df$Landscape)
+head(new_df)
+
+```
+### CALCULATE MEANS FOR LANDSCAPE AND DEPTH
+```{r}
+medias <- new_df %>% 
+  select(3:1503) %>% 
+  group_by(new_df$Capa, new_df$Landscape) %>% 
+  summarize_all(mean)
+colnames(medias)[1:2] <- c("Capa", "Landscape")
+head(medias)
+```
+### LANDSCAPE MEANS
+```{r}
+med <- data.frame(t(medias %>% 
+                    group_by(Landscape) %>% 
+                    summarise_all(mean)))
+nombres_columnas <-med[1, ]
+colnames(med) <- nombres_columnas
+med<- med[-c(1:2), ]
+med <- cbind(bandas = row.names(med), med)
+rownames(med) <- 1:nrow(med)
+med$bandas <- gsub("[Xx]", "", med$bandas)
+med$bandas <- as.numeric(med$bandas)
+med$Alluvial <- as.numeric(med$Pl)
+med$Piedmont <- as.numeric(med$P)
+head(med)
+```
+### LANDSCAPE SIGNATURES
+```{r}
+p1=ggplot(med, mapping = aes(x = bandas)) +
+  geom_point(aes(y = Alluvial, color = "Alluvial"), size = 0.6, alpha = 0.4) +
+  geom_point(aes(y = Piedmont, color = "Piedmont"), size = 0.6, alpha = 0.4) +
+  scale_x_continuous(limits = c(950, 2501), breaks = seq(350, 2500, by = 300)) +
+  scale_y_continuous(limits = c(0.33, 1.1), breaks = seq(0, 1.1, by = 0.05)) +
+  geom_text(aes(x = 1000, y = 0.35, label = "NIR"), color = "#CDB7B5", size = 5) +
+  geom_text(aes(x = 1775, y = 0.35, label = "MIR"), color = "#CDB7B5", size = 5) +
+  labs(x = "Bands", y = "Reflectance") +
+  scale_color_manual(name = "Landscape", 
+                     values = c("Alluvial" = "#EEAD0E", "Piedmont" = "#BCEE68"),
+                     labels = c("Pl", "P")) +
+  geom_vline(xintercept = c(1300), linetype = "dashed", color = "#8B7D7B") +
+  theme_minimal() +
+  theme(legend.position = "bottom", plot.title = element_text(size = 25, hjust = 0))+
+  guides(color = guide_legend(override.aes = list(size = 3.5)))
+p1
+```
+# DEPTH MEANS
+```{r}
+med <- data.frame(t(medias %>% 
+                    group_by(Capa) %>% 
+                    summarise_all(mean)))
+nombres_columnas <-med[1, ]
+colnames(med) <- nombres_columnas
+med<- med[-c(1:2), ]
+med <- cbind(bandas = row.names(med), med)
+rownames(med) <- 1:nrow(med)
+med$bandas <- gsub("[Xx]", "", med$bandas)
+med$bandas <- as.numeric(med$bandas)
+med$a <- as.numeric(med$`0-10`)
+med$b <- as.numeric(med$`10-20`)
+med$c <- as.numeric(med$`20-30`)
+med$Compuesta <- as.numeric(med$Composite)
+head(med)
+```
+### DEPTH SIGNATURES
+```{r}
+p2=ggplot(med, mapping = aes(x = bandas)) +
+  geom_point(aes(y = a, color = "a"), size = 0.6, alpha = 0.4) +
+  geom_point(aes(y = b, color = "b"), size = 0.6, alpha = 0.4) +
+  geom_point(aes(y = c, color = "c"), size = 0.6, alpha = 0.4) +
+  geom_point(aes(y = Compuesta, color = "Compuesta"), size = 0.6, alpha = 0.4) +
+  scale_x_continuous(limits = c(950, 2501), breaks = seq(350, 2500, by = 300)) +
+  scale_y_continuous(limits = c(0.33, 1), breaks = seq(0, 0.9, by = 0.05)) +
+  geom_text(aes(x = 1000, y = 0.35, label = "NIR"), color = "#CDB7B5", size = 5) +
+  geom_text(aes(x = 1775, y = 0.35, label = "MIR"), color = "#CDB7B5", size = 5) +
+  labs(x = "Bands", y = "Reflectance") +
+  scale_color_manual(name = "Depth", 
+                     values = c("a" = "#EEAD0E", "b" = "#BCEE68", 
+                                "c" = "#CD3278","Compuesta"="#76EEC6"),
+                     labels = c("0-10", "10-20", "20-30","0-30")) +
+  geom_vline(xintercept = c(1300), linetype = "dashed", color = "#8B7D7B") +
+  theme_minimal() +
+  theme(legend.position = "bottom", plot.title = element_text(size = 25, hjust = 0))+
+  guides(color = guide_legend(override.aes = list(size = 3.5)))
+p2
+```
+
+### INTERACTION MEANS
+```{r}
+med <- data.frame(t(medias))
+nombres_columnas <- paste0(med[2, ],'_', med[1, ])
+colnames(med) <- nombres_columnas
+med<- med[-c(1:2), ]
+med <- cbind(bandas = row.names(med), med)
+rownames(med) <- 1:nrow(med)
+med$bandas <- gsub("[Xx]", "", med$bandas)
+med$bandas <- as.numeric(med$bandas)
+med$`Pl_0-10` <- as.numeric(med$`Pl_0-10`)
+med$`P_0-10` <- as.numeric(med$`P_0-10`)
+med$`Pl_10-20` <- as.numeric(med$`Pl_10-20`)
+med$`P_10-20` <- as.numeric(med$`P_10-20`)
+med$`Pl_20-30` <- as.numeric(med$`Pl_20-30`)
+med$`P_20-30` <- as.numeric(med$`P_20-30`)
+med$`Pl_0-30` <- as.numeric(med$Pl_Composite)
+med$`P_0-30` <- as.numeric(med$P_Composite)
+head(med) 
+
+```
+
+### INTERACTION SIGNATURES
+```{r}
+p3=ggplot(med, mapping = aes(x = bandas)) +
+  geom_point(aes(y = `P_0-10`, color = "Piedmont_a"), size = 0.6, alpha = 0.4) +
+  geom_point(aes(y = `P_10-20`, color = "Piedmont_b"), size = 0.6, alpha = 0.4) +
+  geom_point(aes(y = `P_20-30`, color = "Piedmont_c"), size = 0.6, alpha = 0.4) +
+  geom_point(aes(y = `P_0-30`, color = "Piedmont_Compuesta"), size = 0.6, alpha = 0.4) +
+  geom_point(aes(y = `Pl_0-10`, color = "Alluvial_a"), size = 0.6, alpha = 0.4) +
+  geom_point(aes(y = `Pl_10-20`, color = "Alluvial_b"), size = 0.6, alpha = 0.4) +
+  geom_point(aes(y = `Pl_20-30`, color = "Alluvial_c"), size = 0.6, alpha = 0.4) +
+  geom_point(aes(y = `Pl_0-30`, color = "Alluvial_Compuesta"), size = 0.6, alpha = 0.4) +
+  scale_x_continuous(limits = c(950, 2501), breaks = seq(350, 2500, by = 300)) +
+  scale_y_continuous(limits = c(0.36, 1.05), breaks = seq(0, 1.05, by = 0.05)) +
+  geom_text(aes(x = 1000, y = 0.38, label = "NIR"), color = "#CDB7B5", size = 5) +
+  geom_text(aes(x = 1775, y = 0.38, label = "MIR"), color = "#CDB7B5", size = 5) +
+  labs(x = "Bands", y = "Reflectance") +
+  scale_color_manual(name = "Treatments", 
+                     values = c("Piedmont_a" = "#1152F1", "Piedmont_b" = "#431697", 
+                                "Piedmont_c" = "#32CD88", "Piedmont_Compuesta" = "#893419",
+                                "Alluvial_a" = "#FFD700", "Alluvial_b" = "red", 
+                                "Alluvial_c" = "#FF33A1", "Alluvial_Compuesta" = "#FF7F0E"),
+                     labels = c("Pl 0-10", "Pl 10-20","Pl 20-30","Pl 0-30",
+                                "P 0-10", "P 10-20","P 20-30","P 0-30")) +
+  geom_vline(xintercept = c(1300), linetype = "dashed", color = "#8B7D7B") +
+  theme_minimal() +
+  theme(legend.position = "bottom", plot.title = element_text(size = 17, hjust = 0))+
+  guides(color = guide_legend(override.aes = list(size = 3.5)))
+p3
+```
+
+### PREPARE DATA TO ANOVA-PCA
+```{r}
+df <- data.frame(t(new_df))
+
+head(df)
+
+name_col <- paste0(df[2, ],'_', df[1, ])
+
+colnames(df) <- name_col
+
+df <- df[-c(1:2), ]
+
+df <- cbind(bandas = row.names(df), df)
+
+rownames(df) <- 1:nrow(df)
+
+df$bandas <- gsub("X", "", df$bandas)
+
+df <- lapply(df, as.numeric)
+
+df <- as.data.frame(df)
+
+head(df)
+```
+# Converts it into a spectral object for soil spectroscopy analysis for interaction.
+```{r}
+write.csv(df, "Soil_spectral.csv", row.names = FALSE)
+
+spectra_object <- matrix2SpectraObject (gr.crit =c(
+  "Pl_Composite", "Pl_0.10", "Pl_10.20", "Pl_20.30",
+  "P_Composite", "P_0.10", "P_10.20", "P_20.30"), 
+                                        gr.cols <- c(
+             "brown", "darkgrey", "black", "grey", 
+             "#FF7256", "red", "#FF82AB", "#9370DB"), 
+                                        freq.unit = "nm",
+                                        int.unit = "Intensidad de absorbancia",
+                                        descrip = "Two landscapes, three depths",
+                                        in.file = "Soil_spectral.csv",
+                                        out.file = "necro1", 
+                                        sep = ",",
+                                        dec = ".")
+```
+### Groups the spectral object by landscape and soil depth
+```{r}
+levels(spectra_object$groups)
+new_grps <- list(landscape = c("P","Pl"), Capa = c("0.10", "10.20", "20.30","Composite"))
+new_spectra <- splitSpectraGroups(spectra_object, new_grps)
+
+# Anova PCA
+PCAspectra <- aov_pcaSpectra(new_spectra, fac = c("landscape", "Capa"))
+```
+### Interaction Anova PCA visualization
+```{r}
+library(dplyr)
+p1spectra <- aovPCAscores(new_spectra, PCAspectra, submat = 3, ellipse = "cls") 
+summary(aov(p1spectra$data$PC1~p1spectra$data$group))
+
+p1spectra
+```
+# Converts it into a spectral object for soil spectroscopy analysis for landscape.
+```{r}
+spectra_object_A <- matrix2SpectraObject (gr.crit =c("P", "Pl"), 
+                                        gr.cols = c("#66CDAA","black"),  
+                                        freq.unit = "nm",
+                                        int.unit = "Absorbance intensity",
+                                        descrip = "Two Landscapes",
+                                        in.file = "Soil_spectral.csv",
+                                        out.file = "necro2", 
+                                        sep = ",",
+                                        dec = ".")
+```
+### Groups the spectral object by landscape 
+```{r}
+levels(spectra_object_A$groups)
+new_grpsland <- list(Landscape = c("A" ,"P"))
+new_spectra_A <- splitSpectraGroups(spectra_object_A, new_grpsland)
+
+# Anova PCA
+PCAspectra_A <- aov_pcaSpectra(new_spectra_A, fac = "Landscape")
+```
+
+### Landscape Anova PCA visualization
+```{r}
+p2spectra_A <- aovPCAscores(new_spectra_A, PCAspectra_A, submat = 1, ellipse = "cls") 
+summary(aov(p2spectra_A$data$PC1~p2spectra_A$data$group))
+p2spectra_A <- p2spectra_A + theme(legend.text = element_text(size = 50))
+p2spectra_A
+
+```
+# Converts it into a spectral object for soil spectroscopy analysis for depth.
+```{r}
+spectra_object_A <- matrix2SpectraObject (gr.crit =c("0.10","10.20","20.30","Composite"), 
+                                        gr.cols = c("#66CDAA", "#FF82AB","#FF7256","black"),  
+                                        freq.unit = "nm",
+                                        int.unit = "Absorbance intensity",
+                                        descrip = "Four Depths",
+                                        in.file = "Soil_spectral.csv",
+                                        out.file = "necro2", 
+                                        sep = ",",
+                                        dec = ".")
+```
+### Groups the spectral object by depth
+```{r}
+levels(spectra_object_A$groups)
+new_grpsland <- list(Capa = c("0.10","10.20","20.30","Composite"))
+new_spectra_A <- splitSpectraGroups(spectra_object_A, new_grpsland)
+PCAspectra_A <- aov_pcaSpectra(new_spectra_A, fac = "Capa")
+```
+### Depth Anova PCA visualization
+```{r}
+p3spectra_A <- aovPCAscores(new_spectra_A, PCAspectra_A, submat = 1, ellipse = "cls") 
+summary(aov(p3spectra_A$data$PC1~p3spectra_A$data$group))
+p3spectra_A <- p3spectra_A  + theme(legend.text = element_text(size = 50))
+p3spectra_A
+
+```
+
+### FIRST CLUSTER
+```{r}
+df2=df[which(df$bandas>=1000.00   & df$bandas<=1198.47),]
+```
+# Converts it into a spectral object for soil spectroscopy analysis for interaction.
+```{r}
+
+write.csv(df2, "Soil_spectral2.csv", row.names = FALSE)
+
+spectra_object <- matrix2SpectraObject (gr.crit =c(
+  "Pl_Composite", "Pl_0.10", "Pl_10.20", "Pl_20.30",
+  "P_Composite", "P_0.10", "P_10.20", "P_20.30"), 
+                                        gr.cols <- c(
+             "brown", "darkgrey", "black", "grey", 
+             "#FF7256", "red", "#FF82AB", "#9370DB"), 
+                                        freq.unit = "nm",
+                                        int.unit = "Absorbance intensity",
+                                        descrip = "Two landscapes, three depths",
+                                        in.file = "Soil_spectral2.csv",
+                                        out.file = "necro1", 
+                                        sep = ",",
+                                        dec = ".")
+```
+### Groups the spectral object 
+```{r}
+levels(spectra_object$groups)
+new_grps <- list(landscape = c("P","Pl"), Capa = c("0.10", "10.20", "20.30","Composite"))
+new_spectra <- splitSpectraGroups(spectra_object, new_grps)
+
+# Anova PCA
+PCAspectra <- aov_pcaSpectra(new_spectra, fac = c("landscape", "Capa"))
+```
+### Interaction Anova PCA visualization
+```{r}
+library(dplyr)
+p1spectra <- aovPCAscores(new_spectra, PCAspectra, submat = 3, ellipse = "cls") 
+summary(aov(p1spectra$data$PC1~p1spectra$data$group))
+
+p1spectra+
+  labs(x='PC1 score (98.5%)',y='PC2 score (1.5%)')
+```
+# Converts it into a spectral object for soil spectroscopy analysis for Landscape.
+```{r}
+spectra_object_A <- matrix2SpectraObject (gr.crit =c("P", "Pl"), 
+                                        gr.cols = c("#66CDAA","black"),  
+                                        freq.unit = "nm",
+                                        int.unit = "Absorbance intensity",
+                                        descrip = "Two landscapes",
+                                        in.file = "Soil_spectral2.csv",
+                                        out.file = "necro2", 
+                                        sep = ",",
+                                        dec = ".")
+```
+### Groups the spectral object by Landscape
+```{r}
+levels(spectra_object_A$groups)
+new_grpsland <- list(Landscape = c("Pl" ,"P"))
+new_spectra_A <- splitSpectraGroups(spectra_object_A, new_grpsland)
+PCAspectra_A <- aov_pcaSpectra(new_spectra_A, fac = "Landscape")
+```
+
+### Landscape Anova PCA visualization
+```{r}
+p2spectra_A <- aovPCAscores(new_spectra_A, PCAspectra_A, submat = 1, ellipse = "cls") 
+summary(aov(p2spectra_A$data$PC1~p2spectra_A$data$group))
+p2spectra_A <- p2spectra_A + theme(legend.text = element_text(size = 50))
+p2spectra_A+
+  labs(x='PC1 score (98.28%)',y='PC2 score (0.72%)')
+
+```
+# Converts it into a spectral object for soil spectroscopy analysis for depth.
+```{r}
+spectra_object_A <- matrix2SpectraObject (gr.crit =c("0.10","10.20","20.30","Composite"), 
+                                        gr.cols = c("#66CDAA", "#FF82AB","#FF7256","black"),  
+                                        freq.unit = "nm",
+                                        int.unit = "Absorbance intensity",
+                                        descrip = "Four depths",
+                                        in.file = "Soil_spectral2.csv",
+                                        out.file = "necro2", 
+                                        sep = ",",
+                                        dec = ".")
+```
+### Groups the spectral object by depth
+```{r}
+levels(spectra_object_A$groups)
+new_grpsland <- list(Capa = c("0.10","10.20","20.30","Composite"))
+new_spectra_A <- splitSpectraGroups(spectra_object_A, new_grpsland)
+PCAspectra_A <- aov_pcaSpectra(new_spectra_A, fac = "Capa")
+```
+### Depth Anova PCA visualization
+```{r}
+p3spectra_A <- aovPCAscores(new_spectra_A, PCAspectra_A, submat = 1, ellipse = "cls") 
+summary(aov(p3spectra_A$data$PC1~p3spectra_A$data$group))
+p3spectra_A <- p3spectra_A  + theme(legend.text = element_text(size = 50))
+p3spectra_A+
+  labs(x='PC1 score (98.1%)',y='PC2 score (1.9%)')
+
+```
+
+
+

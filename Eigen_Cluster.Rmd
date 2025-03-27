@@ -1,0 +1,128 @@
+---
+title: "Eigen Values and Cluster"
+output: html_document
+date: "2024-08-04"
+---
+# Load Libraries
+```{r}
+library(readxl)
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(cluster)
+library(mclust)
+library(fpc)
+library(ggplot2)
+library(tidyr)
+library(readxl)
+library(dplyr)
+library(stringr)
+library(dbscan)
+library(factoextra)
+library(tidyr)
+library(spdep)
+library(ape)
+library(sp)
+library(MVA)
+library(nortest)
+```
+
+# Load Data
+```{r}
+datos=read.csv("/Users/jorgeandresjolahernandez/Desktop/Publicacion_Suelos/AnovaPCA/GitHub_Soil/Database_2.csv")
+datos=datos %>% 
+  drop_na(DA)
+```
+# Extract Wavelength Values
+```{r}
+reflectancias=colnames(datos)[3:ncol(datos)]
+
+reflectancias <- gsub("X", "", reflectancias)
+reflectancias <- gsub("nm", "", reflectancias)
+
+
+reflectancias <- as.numeric(reflectancias)
+
+
+reflectancias=sort(reflectancias)
+max(reflectancias)
+```
+## Create Eigen Values Using SOC and BD
+```{r}
+porc=c()
+for (i in 0:1500) {
+  datos_cor=datos2[,c('SOC','DA')]
+  datos_cor$banda=datos2[,ncol(datos2)-i]
+  m=cor(datos_cor)
+
+  porc=c(porc,(eigen(m)$values[1]+eigen(m)$values[2])/sum(eigen(m)$values))
+}
+
+plot(porc,cex=0.5)
+
+new_datos=data.frame(reflectancias,porc)
+```
+```{r}
+ggplot(data = new_datos, aes(x = reflectancias, y = porc)) +
+  geom_point(color='darkblue') +
+  theme_minimal() +
+  labs(title = 'Eigenvalues in SOC - BD',y='Proportion',x='Wavelength (nm)')+
+  scale_x_continuous(breaks = seq(min(new_datos$reflectancias), max(new_datos$reflectancias), by = 100))+
+  theme(plot.title = element_text(hjust = 0.5))
+
+new_datos$reflectancias[which.max(new_datos$porc)]
+```
+
+```{r}
+z_score_scaling <- function(x) {
+  return ((x - mean(x)) / sd(x))
+}
+
+
+datos_eigen=as.data.frame(z_score_scaling(new_datos$porc))
+colnames(datos_eigen)[1]='eigen'
+datos_eigen$lambda=new_datos$reflectancias
+```
+```{r}
+Ms = datos_eigen
+nc = 3
+# k-means clustering
+set.seed(123)
+
+clus_km <- kmeans(x = Ms, centers = nc)
+datos_eigen$kmeans = clus_km$cluster
+
+# K-medoids (PAM) clustering
+clus_pam <- pam(x = Ms, k = nc, metric = "euclidean")
+datos_eigen$pam = clus_pam$clustering
+citation('mclust')
+# CLARA clustering
+clus_clara <- clara(x = Ms, k = nc, metric = "euclidean",
+                    stand = TRUE, samples = 50, pamLike = TRUE)
+datos_eigen$clara = clus_clara$clustering
+
+# Hierarchical clustering
+d <- dist(x = Ms, method = "euclidean")
+clus_jer <- hclust(d, method = "complete")
+clus_jer$grupo = cutree(clus_jer, k = nc)
+datos_eigen$herarchical = clus_jer$grupo
+
+# Fuzzy clustering
+clus_fuz = fanny(x = Ms, diss = FALSE, k = nc,
+                 metric = "euclidean", stand = FALSE)
+datos_eigen$clus_fuzzy = clus_fuz$clustering
+
+# Model based clustering
+clus_mod = Mclust(data = Ms, G = 3)
+datos_eigen$clus_bmodel = clus_mod$classification
+
+
+tapply(datos_eigen$lambda,datos_eigen$kmeans,range)
+tapply(datos_eigen$lambda,datos_eigen$pam,range)
+tapply(datos_eigen$lambda,datos_eigen$clara,range)
+tapply(datos_eigen$lambda,datos_eigen$herarchical,range)
+tapply(datos_eigen$lambda,datos_eigen$clus_fuzzy,range)
+tapply(datos_eigen$lambda,datos_eigen$clus_bmodel,range)
+
+```
+

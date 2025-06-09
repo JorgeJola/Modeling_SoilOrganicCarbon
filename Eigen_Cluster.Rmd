@@ -29,13 +29,13 @@ library(nortest)
 
 # Load Data
 ```{r}
-datos=read.csv("/Users/jorgeandresjolahernandez/Desktop/Publicacion_Suelos/AnovaPCA/GitHub_Soil/Database_2.csv")
+datos=read.csv("Database_2.csv")
 datos=datos %>% 
   drop_na(DA)
 ```
 # Extract Wavelength Values
 ```{r}
-reflectancias=colnames(datos)[3:ncol(datos)]
+reflectancias=colnames(datos)[4:ncol(datos)]
 
 reflectancias <- gsub("X", "", reflectancias)
 reflectancias <- gsub("nm", "", reflectancias)
@@ -124,5 +124,12 @@ tapply(datos_eigen$lambda,datos_eigen$herarchical,range)
 tapply(datos_eigen$lambda,datos_eigen$clus_fuzzy,range)
 tapply(datos_eigen$lambda,datos_eigen$clus_bmodel,range)
 
+```
+# Create Table 3
+```{r}
+datos %>% 
+  group_by(Landscape) %>% 
+  summarise(mean_soc=mean(SOC),
+            mean_bd=mean(DA))
 ```
 

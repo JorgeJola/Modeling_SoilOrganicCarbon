@@ -17,7 +17,7 @@ library(robustbase)
 
 ### Get Data
 ```{r}
-new_df=read.csv("/Users/jorgeandresjolahernandez/Desktop/Publicacion_Suelos/AnovaPCA/GitHub_Soil/Database_1.csv")
+new_df=read.csv("Database_1.csv")
 ```
 ### Tranformation and cleaning
 ```{r}
@@ -74,7 +74,7 @@ p1=ggplot(med, mapping = aes(x = bandas)) +
   geom_point(aes(y = Alluvial, color = "Alluvial"), size = 0.6, alpha = 0.4) +
   geom_point(aes(y = Piedmont, color = "Piedmont"), size = 0.6, alpha = 0.4) +
   scale_x_continuous(limits = c(950, 2501), breaks = seq(350, 2500, by = 300)) +
-  scale_y_continuous(limits = c(0.33, 1.1), breaks = seq(0, 1.1, by = 0.05)) +
+  scale_y_continuous(limits = c(0.33, 0.55), breaks = seq(0, 1.1, by = 0.05)) +
   geom_text(aes(x = 1000, y = 0.35, label = "NIR"), color = "#CDB7B5", size = 5) +
   geom_text(aes(x = 1775, y = 0.35, label = "MIR"), color = "#CDB7B5", size = 5) +
   labs(x = "Bands", y = "Reflectance") +
@@ -113,7 +113,7 @@ p2=ggplot(med, mapping = aes(x = bandas)) +
   geom_point(aes(y = c, color = "c"), size = 0.6, alpha = 0.4) +
   geom_point(aes(y = Compuesta, color = "Compuesta"), size = 0.6, alpha = 0.4) +
   scale_x_continuous(limits = c(950, 2501), breaks = seq(350, 2500, by = 300)) +
-  scale_y_continuous(limits = c(0.33, 1), breaks = seq(0, 0.9, by = 0.05)) +
+  scale_y_continuous(limits = c(0.33, 0.55), breaks = seq(0, 0.9, by = 0.05)) +
   geom_text(aes(x = 1000, y = 0.35, label = "NIR"), color = "#CDB7B5", size = 5) +
   geom_text(aes(x = 1775, y = 0.35, label = "MIR"), color = "#CDB7B5", size = 5) +
   labs(x = "Bands", y = "Reflectance") +
@@ -162,7 +162,7 @@ p3=ggplot(med, mapping = aes(x = bandas)) +
   geom_point(aes(y = `Pl_20-30`, color = "Alluvial_c"), size = 0.6, alpha = 0.4) +
   geom_point(aes(y = `Pl_0-30`, color = "Alluvial_Compuesta"), size = 0.6, alpha = 0.4) +
   scale_x_continuous(limits = c(950, 2501), breaks = seq(350, 2500, by = 300)) +
-  scale_y_continuous(limits = c(0.36, 1.05), breaks = seq(0, 1.05, by = 0.05)) +
+  scale_y_continuous(limits = c(0.36, 0.55), breaks = seq(0, 1.05, by = 0.05)) +
   geom_text(aes(x = 1000, y = 0.38, label = "NIR"), color = "#CDB7B5", size = 5) +
   geom_text(aes(x = 1775, y = 0.38, label = "MIR"), color = "#CDB7B5", size = 5) +
   labs(x = "Bands", y = "Reflectance") +
@@ -182,6 +182,7 @@ p3
 
 ### PREPARE DATA TO ANOVA-PCA
 ```{r}
+
 df <- data.frame(t(new_df))
 
 head(df)
@@ -299,7 +300,7 @@ p3spectra_A
 
 ### FIRST CLUSTER
 ```{r}
-df2=df[which(df$bandas>=1000.00   & df$bandas<=1198.47),]
+df2=df[which(df$bandas>=1990.45   & df$bandas<=2500.00),]
 ```
 # Converts it into a spectral object for soil spectroscopy analysis for interaction.
 ```{r}
@@ -395,6 +396,15 @@ p3spectra_A+
   labs(x='PC1 score (98.1%)',y='PC2 score (1.9%)')
 
 ```
+# Create Table 2
+```{r}
+df2=df[which(df$bandas>=1990.45  & df$bandas<=2500.00),]
+filtered_bands=paste0('X',df2$bandas)
 
+new_df %>%
+  select(Capa, Landscape, all_of(filtered_bands)) %>% 
+  group_by(Capa, Landscape) %>%
+  summarise(media_global = mean(as.matrix(across(where(is.numeric))), na.rm = TRUE))
+```
 
 
